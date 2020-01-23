@@ -1,5 +1,6 @@
 /* 車輪走行のデータ取得用プログラム
-　 _秒待ってからMAX速度(Valu=1023)で_秒車輪走行
+　(Dynamixel 5個で行うテスト用)
+　 _秒待ってから設定速度(Valu)で_秒車輪走行
    減速開始から_秒後までデータ取得
  */
 #include <MyRobot.h>
@@ -16,13 +17,17 @@
 
 #define SCAN_RATE 50000 //[us]
 
-#define FILENAME "OFFSET.txt"
 #define LOG_FILE  "test01.txt"
 
+//回転の速さ
+double target_value = 1023;
+double target_velocity = convertValue2Rpm(target_value);
 
 void ReadData(int32_t *q_, int16_t *current_, uint16_t *voltage_);
 void WriteData(int32_t *q_, int16_t *current_, uint16_t *voltage_);
+void WriteInitialInfo(double target_velocity_);
 
+bool isInitializeDone(void);
 
 void initializeFL(void);
 void initializeFR(void);
@@ -32,8 +37,10 @@ void enableFLTorque(void);
 void enableFRTorque(void);
 void enableBLTorque(void);
 void enableBRTorque(void);
-void disableAllTorque(void);
 
+bool initializeFlag[5];
+
+int32_t position_init[5]; //各関節の初期限界角度
 
 //Instance
 dynamixel::PortHandler *portHandler;
@@ -44,25 +51,44 @@ HardwareTimer Timer(TIMER_CH1);
 File myFile;
 bool flag = false;
 
-
-//SDカードから読み取るオフセットの受け皿
-int32_t offset_buffer[5];
-
 double initialPose[5] = {
     0, 0, M_PI / 6, -M_PI/3, 0
 };
 
-
 //Time settings
-double current_time = 0; //[ms]
-double waiting_time = 2000; //[ms]
-double endtime = 12000; //[ms]
-double sampling_end = 13000; //[ms]
+double current_time = 0; //現在時間[ms]
+double waiting_time = 3000; //走行開始時間[ms]
+double endtime = 8000; //停止時間[ms]
+double sampling_end = 12000; //記録時間[ms]
 
 //データ取得用配列
 int32_t q[5];
 int16_t current[5];
 uint16_t voltage[5];
+
+//SDカード内のファイルに最初にいろいろ記述する
+void WriteInitialInfo(double target_velocity_){
+  //「このファイルは屈伸させた時のデータ」というのを記載
+  myFile.println("This file is the record in moving by wheel");
+
+  //割り込み周期について
+  myFile.print("The interval of this data is : ");
+  myFile.println(SCAN_RATE);
+  
+  //設定した振幅を記入
+  myFile.print("velocity[rpm] = ");
+  myFile.println(target_velocity_);
+
+  //
+  myFile.print("Current time");
+  myFile.print(" | ");
+  myFile.print("position(or velocity)");
+  myFile.print(" | ");
+  myFile.print("current");
+  myFile.print(" | ");
+  myFile.print("voltage");
+  myFile.println();
+}
 
 
 void ReadData(int32_t *q_, int16_t *current_, uint16_t *voltage_){
@@ -113,8 +139,8 @@ void WriteData(int32_t *q_, int16_t *current_, uint16_t *voltage_){
     myFile.print(" | ");
 
     myFile.println();
-
 }
+
 
 void WheelMove(void){
     ReadData(q, current, voltage);
@@ -153,9 +179,9 @@ void WheelMove(void){
     //3sec -> start 
     if(current_time > waiting_time && flag == false){
       dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
-      dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
-      dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
-      dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
+      //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
+      //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
+      //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
       flag = true;
     }
 
@@ -166,9 +192,9 @@ void WheelMove(void){
         //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
         //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
         //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-
     }
 
+    //sampling_end -> sampling stop
     if(current_time > sampling_end){
         //recording finish!
         myFile.close();
@@ -605,24 +631,16 @@ void enableBRTorque(void){
     //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_PWM, 855, &dxl_error);
 }
 
-void disableAllTorque(void){
-    for(int i=0;i<5; i++){
-        dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, i, ADDR_TORQUE_ENABLE, TORQUE_DISABLE, &dxl_error);
+bool isInitializeDone(void){
+    int sum = 0;
+    for (int i = 0; i < 5; i++){
+        sum += initializeFlag[i];
     }
-}
-
-/*
-int getch(){
-    while(1){
-        if(Serial.available()>0){
-            break;
-        }
-    }円の直径のデータが一行ずつ5000個入っている）を選択して、データを読み込み、一行ずつs[0]~s[4999]の配列に入れる。
-}*/
-
-//Value->Angle
-double convertValue2Angle(int val){
-    return 2*PI*val/4095 - PI;
+    if (sum == 5){
+        return true;
+    }else{
+        return false;
+    }
 }
 
 void setup() {
@@ -641,16 +659,16 @@ void setup() {
 
     //SD card
     pinMode(cs, OUTPUT);
+    //SDカードの確認
     if(!SD.begin(cs)){
         Serial.println("No SD !");
         while(1);
     }
     Serial.println("SD Initialization Done!");
     
-    //offset Read
+    /* オフセットファイルを読み込んで配列に格納 */
     myFile = SD.open(FILENAME, FILE_READ);
 
-    Serial.print("filesize is :");
     Serial.println(myFile.size());
     if (myFile){
         for (int i = 0; i < 5;i++){
@@ -661,17 +679,61 @@ void setup() {
     myFile.close();
 
     //Check File
-    /*
-    if(SD.exists(LOG_FILE)){
+    /*if(SD.exists(LOG_FILE)){
         Serial.println("The same name file has already exist !!");
         while(1);
     }*/
-
 
     initializeFL();
     initializeFR();
     initializeBL();
     initializeBR();
+
+    for (int i = 0; i < 5;i++){
+        initializeFlag[i] = false;
+    }
+
+    /* 限界角度での値を取得 */
+    while (!isInitializeDone())  {
+        Serial.println("Press enter the number : ");
+        byte inputNum;
+
+        //バッファをクリア
+        while (Serial.available())    {
+            Serial.read();
+        }
+
+        //モータ番号を受け取る
+        while (1){
+            if (Serial.available() > 0){
+                inputNum = Serial.parseInt();
+                break;
+            }
+        }
+
+        //初期角度(限界角度)を計測
+        dxl_comm_result = packetHandler->read4ByteTxRx(portHandler, inputNum, ADDR_PRESENT_POSITION, (uint32_t *)&position_init[inputNum], &dxl_error);
+        //LEDを消す
+        dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, inputNum, ADDR_LED, LED_ON, &dxl_error);
+        //オフセット完了の情報をかく
+        initializeFlag[inputNum] = true;
+
+        //今まで何番のモータのオフセットを取ったか確認
+        Serial.print("You got position_limit of No. ");
+        for (uint8_t i = 0; i < 5; i++){
+            if (initializeFlag[i] == true){
+                Serial.print(i);
+                Serial.print(",");
+            }
+        }
+        Serial.println();
+    }
+
+    delay(500);
+    enableFLTorque();
+    enableFRTorque();
+    enableBLTorque();
+    enableBRTorque();
 
     //初期姿勢へ
     Serial.println("Press s to change initial pose");
@@ -684,13 +746,6 @@ void setup() {
             }    Timer.stop();
         }
     }
-
-
-    delay(500);
-    enableFLTorque();
-    enableFRTorque();
-    enableBLTorque();
-    enableBRTorque();
 
     /* 初期姿勢の目標角を設定 */
    for (int i = 0; i < 5; i++){
@@ -734,7 +789,6 @@ void setup() {
     Timer.attachInterrupt(WheelMove); //割り込みさせる関数を指定
     Timer.start(); //割込み開始
 
-    Serial.println("Press f to torque_disable");
 }   
 
 void loop() {    
