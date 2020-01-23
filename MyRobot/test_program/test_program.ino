@@ -1,6 +1,6 @@
 /* 車輪走行のデータ取得用プログラム
-　 3秒待ってからMAX速度(Valu=1023)で5秒車輪走行
-   減速開始から5秒後までデータ取得
+　 _秒待ってからMAX速度(Valu=1023)で_秒車輪走行
+   減速開始から_秒後までデータ取得
  */
 #include <MyRobot.h>
 #include <SD.h>
@@ -9,8 +9,15 @@
 #define BAUDRATE                        2000000
 #define DEVICENAME                      "/dev/ttyACM0"
 
+//加速
+#define WHEEL_PROFILE_ACCELERATION 30
+//減速（緊急停止時）
+#define WHEEL_PROFILE_DECELERATION 100
+
+#define SCAN_RATE 50000 //[us]
+
 #define FILENAME "OFFSET.txt"
-#define LOG_FILE  "104.txt"
+#define LOG_FILE  "test01.txt"
 
 
 void ReadData(int32_t *q_, int16_t *current_, uint16_t *voltage_);
@@ -48,8 +55,8 @@ double initialPose[5] = {
 
 //Time settings
 double current_time = 0; //[ms]
-double waiting_time = 3000; //[ms]
-double endtime = 8000; //[ms]
+double waiting_time = 2000; //[ms]
+double endtime = 12000; //[ms]
 double sampling_end = 13000; //[ms]
 
 //データ取得用配列
@@ -116,22 +123,49 @@ void WheelMove(void){
 
     Serial.println(current_time);
 
+    //緊急停止
+    if (Serial.available() > 0){
+        char input = 'i';
+        input = Serial.read();
+        if (input == 'e'){
+            //停止までの時間を短く
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
+            //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
+            //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
+            //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
+
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+            //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+            //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+            //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+
+            Serial.println("Emergency stop !!!");
+            
+            myFile.close();
+            Serial.println("Sampling has been finished !");
+            Serial.end();
+            Timer.stop();
+
+            Timer.detachInterrupt();
+        }
+    }
+
     //3sec -> start 
     if(current_time > waiting_time && flag == false){
-      dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 4, ADDR_GOAL_VELOCITY, 1023, &dxl_error);
-      //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 9, ADDR_GOAL_VELOCITY, 1023, &dxl_error);
-      //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 14, ADDR_GOAL_VELOCITY, 1023, &dxl_error);
-      //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 19, ADDR_GOAL_VELOCITY, 1023, &dxl_error);
+      dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
+      dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
+      dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
+      dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
       flag = true;
     }
 
     //8sec -> stop 
     if(current_time > endtime){
         // Setting Target Velocity
-        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 4, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 9, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 14, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 19, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
 
     }
 
@@ -583,7 +617,7 @@ int getch(){
         if(Serial.available()>0){
             break;
         }
-    }
+    }円の直径のデータが一行ずつ5000個入っている）を選択して、データを読み込み、一行ずつs[0]~s[4999]の配列に入れる。
 }*/
 
 //Value->Angle
@@ -627,10 +661,11 @@ void setup() {
     myFile.close();
 
     //Check File
+    /*
     if(SD.exists(LOG_FILE)){
         Serial.println("The same name file has already exist !!");
         while(1);
-    }
+    }*/
 
 
     initializeFL();
@@ -646,7 +681,7 @@ void setup() {
             input = Serial.read();
             if (input == 's'){
                 break;
-            }
+            }    Timer.stop();
         }
     }
 
@@ -669,11 +704,8 @@ void setup() {
         else{ //Wheel
             dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, 0, &dxl_error);
         }
-    }  
-
-
+    }
     
-
     //motor data書き込み
     myFile = SD.open(LOG_FILE, FILE_WRITE); 
     
@@ -683,74 +715,9 @@ void setup() {
     delay(500);
     ReadInitialState(q, current, voltage);
 
-
-    if(myFile){
-        myFile.print("time[ms] ,");
-        myFile.print("FL_Switch[rad] ,");
-        myFile.print("FL_Yall[rad] ,");
-        myFile.print("FL_Hip[rad] ,");
-        myFile.print("FL_Knee[rad] ,");
-        myFile.print("FL_Wheel[rpm] ,");
-        myFile.print("FR_Switch[rad] ,");
-        myFile.print("FR_Yall[rad] ,");
-        myFile.print("FR_Hip[rad] ,");
-        myFile.print("FR_Knee[rad] ,");
-        myFile.print("FR_Wheel[rpm] ,");
-        myFile.print("BL_Switch[rad] ,");
-        myFile.print("BL_Yall[rad] ,");
-        myFile.print("BL_Hip[rad] ,");
-        myFile.print("BL_Knee[rad] ,");
-        myFile.print("BL_Wheel[rpm] ,");
-        myFile.print("BR_Switch[rad] ,");
-        myFile.print("BR_Yall[rad] ,");
-        myFile.print("BR_Hip[rad] ,");
-        myFile.print("BR_Knee[rad] ,");
-        myFile.print("BR_Wheel[rpm] ,");
-        myFile.print("FL_Switch_Current[mA] ,");
-        myFile.print("FL_Yall_Current[mA] ,");
-        myFile.print("FL_Hip_Current[mA] ,");
-        myFile.print("FL_Knee_Current[mA] ,");
-        myFile.print("FL_Wheel_Current[mA] ,");
-        myFile.print("FR_Switch_Current[mA] ,");
-        myFile.print("FR_Yall_Current[mA] ,");
-        myFile.print("FR_Hip_Current[mA] ,");
-        myFile.print("FR_Knee_Current[mA] ,");
-        myFile.print("FR_Wheel_Current[mA] ,");
-        myFile.print("BL_Switch_Current[mA] ,");
-        myFile.print("BL_Yall_Current[mA] ,");
-        myFile.print("BL_Hip_Current[mA] ,");
-        myFile.print("BL_Knee_Current[mA] ,");
-        myFile.print("BL_Wheel_Current[mA] ,");
-        myFile.print("BR_Switch_Current[mA] ,");
-        myFile.print("BR_Yall_Current[mA] ,");
-        myFile.print("BR_Hip_Current[mA] ,");
-        myFile.print("BR_Knee_Current[mA] ,");
-        myFile.print("BR_Wheel_Current[mA] ,");
-        myFile.print("FL_Switch_Voltage[V] ,");
-        myFile.print("FL_Yall_Voltage[V] ,");
-        myFile.print("FL_Hip_Voltage[V] ,");
-        myFile.print("FL_Knee_Voltage[V] ,");
-        myFile.print("FL_Wheel_Voltage[V] ,");
-        myFile.print("FR_Switch_Voltage[V] ,");
-        myFile.print("FR_Yall_Voltage[V] ,");
-        myFile.print("FR_Hip_Voltage[V] ,");
-        myFile.print("FR_Knee_Voltage[V] ,");
-        myFile.print("FR_Wheel_Voltage[V] ,");
-        myFile.print("BL_Switch_Voltage[V] ,");
-        myFile.print("BL_Yall_Voltage[V] ,");
-        myFile.print("BL_Hip_Voltage[V] ,");
-        myFile.print("BL_Knee_Voltage[V] ,");
-        myFile.print("BL_Wheel_Voltage[V] ,");
-        myFile.print("BR_Switch_Voltage[V] ,");
-        myFile.print("BR_Yall_Voltage[V] ,");
-        myFile.print("BR_Hip_Voltage[V] ,");
-        myFile.print("BR_Knee_Voltage[V] ,");
-        myFile.print("BR_Wheel_Voltage[V] ,");
-        myFile.println();
-        Serial.println("Log Ready");
-    }
-    
-    Serial.println("Waiting for m key input...");
+    Serial.println();
+    Serial.println("Waiting for m key input -> wheel moving");
+    Serial.println("Emergency stop -> Press e ");
     while (1){
         char input = 'i';
         if (Serial.available() > 0){
@@ -767,24 +734,8 @@ void setup() {
     Timer.attachInterrupt(WheelMove); //割り込みさせる関数を指定
     Timer.start(); //割込み開始
 
-
-    /* トルクoff */
-    /*Serial.println("Press e to torque_disable");
-    while (1){
-        char input = 'i';
-        if (Serial.available() > 0){
-            input = Serial.read();
-            if (input == 'e'){
-                break;
-            }
-        }
-    
-    }
-    disableAllTorque();
-
-        Serial.println("All Motor Disabled !");*/
+    Serial.println("Press f to torque_disable");
 }   
 
-void loop() {
-    
+void loop() {    
 }
