@@ -43,11 +43,11 @@ bool initializeFlag[5];
 
 int32_t position_init[5]; //各関節の初期限界角度
 
-//非常停止スイッチはNC(押してない時は導通)
+//非常停止スイッチはNC
 const int buttonPush = HIGH;
 const int buttonNotPush = LOW;
 
-const int buttonPin = 2; //ボタン読み取り設定を2番pinに
+const int buttonPin = 51; //ボタン読み取り設定をArduinoPin51番に(OpenCRではGPIO 2番)
 int ledPin = BDPIN_LED_USER_1; //OpenCRのUSER1を非常停止時にON
 int buttonState = 0; //ボタンの状態
 
@@ -186,12 +186,13 @@ void WheelMove(void){
         //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
 
         Serial.println("Emergency stop !!!");
-
+        digitalWrite(ledPin, HIGH);
         stop_time = current_time; //緊急停止時間記録
     
         button = true;
     }
     
+    //緊急停止から2秒後に記録終了
     if(button == true && current_time > stop_time+2000){
         myFile.close();
         Serial.println("Sampling has been finished !");
@@ -716,7 +717,7 @@ void setup() {
 
     //非常停止スイッチ
     pinMode(ledPin, OUTPUT);    //LED set      
-    pinMode(buttonPin, INPUT_PULLUP); //ボタンを押してない時にLOWになるよう設定
+    pinMode(buttonPin, INPUT_PULLUP); 
 
     initializeFL();
     initializeFR();
@@ -771,7 +772,7 @@ void setup() {
             input = Serial.read();
             if (input == 's'){
                 break;
-            }    Timer.stop();
+            }
         }
     }
 
@@ -793,6 +794,16 @@ void setup() {
             dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, 0, &dxl_error);
         }
     }
+
+    //非常停止スイッチを押していないか
+    buttonState = digitalRead(buttonPin); //ボタンの状態読み取り
+
+    if(buttonState == HIGH){
+        Serial.println();
+        Serial.println("Don't press the emergency button");
+        Serial.println();
+    }
+    
     
     //motor data書き込み
     myFile = SD.open(LOG_FILE, FILE_WRITE); 
