@@ -28,6 +28,7 @@ void WriteData(int32_t *q_, int16_t *current_, uint16_t *voltage_);
 void WriteInitialInfo(double target_velocity_);
 
 bool isInitializeDone(void);
+void setVelocityBasedProfile(void);
 
 void initializeFL(void);
 void initializeFR(void);
@@ -250,6 +251,20 @@ void ReadInitialState(int32_t *q_, int16_t *current_, uint16_t *voltage_){
     myFile.println();
 }
 
+//VelocityBased-Profileモード
+void setVelocityBasedProfile(void){
+    for(int i = 0; i < 5; i++){
+        //DriveModeを読み込んで
+        const uint8_t VelocityBased_Data = 0b11111011;
+        uint8_t DriveMode_buffer;
+        //現在のDriveModeを読み込む
+        dxl_comm_result = packetHandler->read1ByteTxRx(portHandler, i, ADDR_DRIVE_MODE, &DriveMode_buffer, &dxl_error);
+        //Bit2を消す
+        DriveMode_buffer = DriveMode_buffer & VelocityBased_Data;
+        //新しいDriveModeを書き込む
+        dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, i, ADDR_DRIVE_MODE, DriveMode_buffer, &dxl_error);
+    }
+}
 
 void initializeFL(void){
     //initialize FL_Switch -------------------------------------------------------------------
@@ -667,13 +682,13 @@ void setup() {
     Serial.println("SD Initialization Done!");
     
     /* オフセットファイルを読み込んで配列に格納 */
-    myFile = SD.open(FILENAME, FILE_READ);
+    myFile = SD.open(OFFSET_FILE, FILE_READ);
 
     Serial.println(myFile.size());
     if (myFile){
         for (int i = 0; i < 5;i++){
-            offset_buffer[i] = myFile.parseInt();
-            Serial.println(offset_buffer[i]);
+            offset[i] = myFile.parseInt();
+            Serial.println(offset[i]);
         }
     }
     myFile.close();
@@ -729,12 +744,6 @@ void setup() {
         Serial.println();
     }
 
-    delay(500);
-    enableFLTorque();
-    enableFRTorque();
-    enableBLTorque();
-    enableBRTorque();
-
     //初期姿勢へ
     Serial.println("Press s to change initial pose");
     while (1){
@@ -747,13 +756,18 @@ void setup() {
         }
     }
 
+    enableFLTorque();
+    enableFRTorque();
+    enableBLTorque();
+    enableBRTorque();
+
     /* 初期姿勢の目標角を設定 */
    for (int i = 0; i < 5; i++){
         if(i % 5 != 4){ //leg
             if(i/10 == 0){ //Forward
-                dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, offset_buffer[i] + convertAngle2Value(gearRatio[i%5] * initialPose[i % 5]), &dxl_error);
+                dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i%5] * initialPose[i % 5]), &dxl_error);
             }else{ //Backward
-                dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, offset_buffer[i] + convertAngle2Value(-gearRatio[i % 5] * initialPose[i % 5]), &dxl_error);
+                dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(-gearRatio[i % 5] * initialPose[i % 5]), &dxl_error);
             }
         }
         else{ //Wheel

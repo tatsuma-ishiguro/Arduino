@@ -1,6 +1,7 @@
-/* 車輪走行のデータ取得用プログラム
-　 3秒待ってからtarget_valueの速度(MAX Valu=1023)で5秒車輪走行
-   減速開始から5秒後までデータ取得
+/* transformプログラム
+　(Dynamixel 5個で行うテスト用)
+　 _秒待ってから設定速度(Valu)で_秒車輪走行
+   減速開始から_秒後までデータ取得
  */
 #include <MyRobot.h>
 #include <SD.h>
@@ -16,7 +17,7 @@
 
 #define SCAN_RATE 50000 //[us]
 
-#define LOG_FILE  "01.txt"
+#define LOG_FILE  "test01.txt"
 
 //回転の速さ
 double target_value = 1023;
@@ -37,9 +38,9 @@ void enableFRTorque(void);
 void enableBLTorque(void);
 void enableBRTorque(void);
 
-bool initializeFlag[NUMJOINTS];
+bool initializeFlag[5];
 
-int32_t position_init[NUMJOINTS]; //各関節の初期限界角度
+int32_t position_init[5]; //各関節の初期限界角度
 
 //Instance
 dynamixel::PortHandler *portHandler;
@@ -61,9 +62,9 @@ double endtime = 8000; //停止時間[ms]
 double sampling_end = 12000; //記録時間[ms]
 
 //データ取得用配列
-int32_t q[NUMJOINTS];
-int16_t current[NUMJOINTS];
-uint16_t voltage[NUMJOINTS];
+int32_t q[5];
+int16_t current[5];
+uint16_t voltage[5];
 
 //SDカード内のファイルに最初にいろいろ記述する
 void WriteInitialInfo(double target_velocity_){
@@ -92,7 +93,7 @@ void WriteInitialInfo(double target_velocity_){
 
 void ReadData(int32_t *q_, int16_t *current_, uint16_t *voltage_){
     //Read Data
-    for (int i = 0; i < NUMJOINTS; i++){//position & velocity
+    for (int i = 0; i < 5; i++){//position & velocity
         if(i % 5 != 4){ //leg
             dxl_comm_result = packetHandler->read4ByteTxRx(portHandler, i, ADDR_PRESENT_POSITION, (uint32_t*)&q_[i], &dxl_error);
         }
@@ -113,7 +114,7 @@ void WriteData(int32_t *q_, int16_t *current_, uint16_t *voltage_){
     myFile.print(current_time);
     myFile.print(", ");
     
-    for (int i = 0; i < NUMJOINTS; i++){
+    for (int i = 0; i < 5; i++){
         if(i % 5 != 4){ //leg
             myFile.print(q_[i]);
             myFile.print(", ");
@@ -125,13 +126,13 @@ void WriteData(int32_t *q_, int16_t *current_, uint16_t *voltage_){
     }
     myFile.print(" | ");
 
-    for (int i = 0; i < NUMJOINTS; i++){
+    for (int i = 0; i < 5; i++){
         myFile.print(current_[i]);
         myFile.print(", ");
     }
     myFile.print(" | ");
     
-    for (int i = 0; i < NUMJOINTS; i++){
+    for (int i = 0; i < 5; i++){
         myFile.print(voltage_[i]);
         myFile.print(", ");
     }
@@ -155,14 +156,14 @@ void WheelMove(void){
         if (input == 'e'){
             //停止までの時間を短く
             dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
+            //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
+            //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
+            //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
 
             dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+            //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+            //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+            //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
 
             Serial.println("Emergency stop !!!");
             
@@ -175,22 +176,22 @@ void WheelMove(void){
         }
     }
 
-    //waiting_time -> start 
+    //3sec -> start 
     if(current_time > waiting_time && flag == false){
       dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
-      dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
-      dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
-      dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
+      //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
+      //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
+      //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
       flag = true;
     }
 
-    //endtime -> stop 
-    if(current_time > endtime){        
+    //8sec -> stop 
+    if(current_time > endtime){
         // Setting Target Velocity
         dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
     }
 
     //sampling_end -> sampling stop
@@ -208,7 +209,7 @@ void WheelMove(void){
 
 //車輪を設置させる前の状態を記録
 void ReadInitialState(int32_t *q_, int16_t *current_, uint16_t *voltage_){
-    for (int i = 0; i < NUMJOINTS; i++){//position & velocity
+    for (int i = 0; i < 5; i++){//position & velocity
         if(i % 5 != 4){ //leg
             dxl_comm_result = packetHandler->read4ByteTxRx(portHandler, i, ADDR_PRESENT_POSITION, (uint32_t*)&q_[i], &dxl_error);
         }
@@ -226,7 +227,7 @@ void ReadInitialState(int32_t *q_, int16_t *current_, uint16_t *voltage_){
     myFile.print("Initial_State");
     myFile.print(", ");
     
-    for (int i = 0; i < NUMJOINTS; i++){
+    for (int i = 0; i < 5; i++){
         if(i % 5 != 4){ //leg
             myFile.print(q_[i]);
             myFile.print(", ");
@@ -237,12 +238,12 @@ void ReadInitialState(int32_t *q_, int16_t *current_, uint16_t *voltage_){
         }
     }
 
-    for (int i = 0; i < NUMJOINTS; i++){
+    for (int i = 0; i < 5; i++){
         myFile.print(current_[i]);
         myFile.print(", ");
     }
     
-    for (int i = 0; i < NUMJOINTS; i++){
+    for (int i = 0; i < 5; i++){
         myFile.print(voltage_[i]);
         myFile.print(", ");
     }
@@ -268,7 +269,7 @@ void initializeFL(void){
     dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_SWITCH_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
     //Profile Acceleration
     dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_SWITCH_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-    //initialize FL_Yall -------------------------------------------------------------------
+    //initialize FL_Yall --uint8_t *id_, -----------------------------------------------------------------
     //Setting Operating Mode to Position-Control-Mode
     dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_YALL_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
     // Setting Position P Gain
@@ -632,16 +633,15 @@ void enableBRTorque(void){
 
 bool isInitializeDone(void){
     int sum = 0;
-    for (int i = 0; i < NUMJOINTS; i++){
+    for (int i = 0; i < 5; i++){
         sum += initializeFlag[i];
     }
-    if (sum == NUMJOINTS){
+    if (sum == 5){
         return true;
     }else{
         return false;
     }
 }
-
 
 void setup() {
     Serial.begin(BAUDRATE);
@@ -667,28 +667,29 @@ void setup() {
     Serial.println("SD Initialization Done!");
     
     /* オフセットファイルを読み込んで配列に格納 */
-    myFile = SD.open(OFFSET_FILE, FILE_READ);
+    myFile = SD.open(FILENAME, FILE_READ);
 
+    Serial.println(myFile.size());
     if (myFile){
-        for (int i = 0; i < NUMJOINTS;i++){
-            offset[i] = myFile.parseInt();
-            Serial.println(offset[i]);
+        for (int i = 0; i < 5;i++){
+            offset_buffer[i] = myFile.parseInt();
+            Serial.println(offset_buffer[i]);
         }
     }
     myFile.close();
 
     //Check File
-    if(SD.exists(LOG_FILE)){
+    /*if(SD.exists(LOG_FILE)){
         Serial.println("The same name file has already exist !!");
         while(1);
-    }
+    }*/
 
     initializeFL();
     initializeFR();
     initializeBL();
     initializeBR();
 
-    for (int i = 0; i < NUMJOINTS;i++){
+    for (int i = 0; i < 5;i++){
         initializeFlag[i] = false;
     }
 
@@ -719,7 +720,7 @@ void setup() {
 
         //今まで何番のモータのオフセットを取ったか確認
         Serial.print("You got position_limit of No. ");
-        for (uint8_t i = 0; i < NUMJOINTS; i++){
+        for (uint8_t i = 0; i < 5; i++){
             if (initializeFlag[i] == true){
                 Serial.print(i);
                 Serial.print(",");
@@ -742,28 +743,28 @@ void setup() {
             input = Serial.read();
             if (input == 's'){
                 break;
-            }
+            }    Timer.stop();
         }
     }
 
     /* 初期姿勢の目標角を設定 */
-    for (int i = 0; i < NUMJOINTS; i++){
+   for (int i = 0; i < 5; i++){
         if(i % 5 != 4){ //leg
             if(i/10 == 0){ //Forward
-                dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]), &dxl_error);
+                dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, offset_buffer[i] + convertAngle2Value(gearRatio[i%5] * initialPose[i % 5]), &dxl_error);
             }else{ //Backward
-                dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(-gearRatio[i % 5] * initialPose[i % 5]), &dxl_error);
+                dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, offset_buffer[i] + convertAngle2Value(-gearRatio[i % 5] * initialPose[i % 5]), &dxl_error);
             }
         }
         else{ //Wheel
             dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, 0, &dxl_error);
         }
-    }  
-
+    }
+    
     //motor data書き込み
     myFile = SD.open(LOG_FILE, FILE_WRITE); 
     
-    Serial.println("LogFile opened");
+    Serial.println("File opened");
     myFile.println();
     
     delay(500);
@@ -790,6 +791,5 @@ void setup() {
 
 }   
 
-void loop() {
-    
+void loop() {    
 }
