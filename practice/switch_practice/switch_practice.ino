@@ -186,6 +186,7 @@ void WheelMove(void){
         //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
 
         Serial.println("Emergency stop !!!");
+        myFile.println("Emergency stop time !!!"); //緊急停止した時刻をSDカードに
         digitalWrite(ledPin, HIGH);
         stop_time = current_time; //緊急停止時間記録
     
@@ -193,7 +194,8 @@ void WheelMove(void){
     }
     
     //緊急停止から2秒後に記録終了
-    if(button == true && current_time > stop_time+2000){
+    if(button == true && current_time > stop_time + 2000){
+        myFile.println("--- This experiment was finished by an emergency stop ---");
         myFile.close();
         Serial.println("Sampling has been finished !");
         Serial.end();
