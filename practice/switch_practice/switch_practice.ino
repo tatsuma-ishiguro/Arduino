@@ -2,6 +2,7 @@
 　(Dynamixel 5個で行うテスト用)
 　 _秒待ってから設定速度(Valu)で_秒車輪走行
    減速開始から_秒後までデータ取得
+   LED光らせようとしてるけどうまく行かない
  */
 #include <MyRobot.h>
 #include <SD.h>
@@ -46,10 +47,10 @@ int32_t position_init[5]; //各関節の初期限界角度
 //非常停止スイッチはNC
 const int buttonPush = HIGH;
 const int buttonNotPush = LOW;
-
 const int buttonPin = 51; //ボタン読み取り設定をArduinoPin51番に(OpenCRではGPIO 2番)
 int ledPin = BDPIN_LED_USER_1; //OpenCRのUSER1を非常停止時にON
 int buttonState = 0; //ボタンの状態
+bool button = false;
 
 //Instance
 dynamixel::PortHandler *portHandler;
@@ -59,7 +60,6 @@ HardwareTimer Timer(TIMER_CH1);
 //Data file settings
 File myFile;
 bool flag = false;
-bool button = false;
 
 double initialPose[5] = {
     0, 0, M_PI / 6, -M_PI/3, 0
@@ -800,7 +800,7 @@ void setup() {
     //非常停止スイッチを押していないか
     buttonState = digitalRead(buttonPin); //ボタンの状態読み取り
 
-    if(buttonState == HIGH){
+    if(buttonState == buttonPush){
         Serial.println();
         Serial.println("Don't press the emergency button");
         Serial.println();

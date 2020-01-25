@@ -2,8 +2,8 @@
 const int buttonON = HIGH;    // ボタンが押されているとピンの値はLOW
 const int buttonOFF = LOW;  // ボタンが押されていないとピンの値はHIGH
  
-const int buttonPin = 2;
-int ledPin = 13;
+const int buttonPin = 51;
+int ledPin = BDPIN_LED_USER_1;
 int buttonState = 0;
  
 void setup() {

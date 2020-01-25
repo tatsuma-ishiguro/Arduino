@@ -42,6 +42,13 @@ bool initializeFlag[NUMJOINTS];
 
 int32_t position_init[NUMJOINTS]; //各関節の初期限界角度
 
+//非常停止スイッチはNC
+const int buttonPush = HIGH;
+const int buttonNotPush = LOW;
+const int buttonPin = 51; //ボタン読み取り設定をOpenCRのGPIO 2番pinに(ArduinoPin51番)
+int buttonState = 0; //ボタンの状態
+bool button = false;
+
 //Instance
 dynamixel::PortHandler *portHandler;
 dynamixel::PacketHandler *packetHandler;
@@ -60,6 +67,7 @@ double current_time = 0; //現在時間[ms]
 double waiting_time = 3000; //走行開始時間[ms]
 double endtime = 8000; //停止時間[ms]
 double sampling_end = 12000; //記録時間[ms]
+double stop_time = 0; //緊急停止時間記録用[ms]
 
 //データ取得用配列
 int32_t q[NUMJOINTS];
@@ -149,32 +157,7 @@ void WheelMove(void){
 
     Serial.println(current_time);
 
-    //緊急停止
-    if (Serial.available() > 0){
-        char input = 'i';
-        input = Serial.read();
-        if (input == 'e'){
-            //停止までの時間を短く
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
-
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-
-            Serial.println("Emergency stop !!!");
-            
-            myFile.close();
-            Serial.println("Sampling has been finished !");
-            Serial.end();
-            Timer.stop();
-
-            Timer.detachInterrupt();
-        }
-    }
+    buttonState = digitalRead(buttonPin); //ボタンの状態読み取り
 
     //waiting_time -> start 
     if(current_time > waiting_time && flag == false){
@@ -184,6 +167,37 @@ void WheelMove(void){
       dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
       flag = true;
     }
+
+    //緊急停止
+    if (buttonState == buttonPush && button == false){ //ボタンON
+        //停止までの時間を短く
+        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
+        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
+        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
+        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
+
+        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+
+        Serial.println("Emergency stop !!!");
+        myFile.println("Emergency stop time !!!"); //緊急停止した時刻をSDカードに
+        stop_time = current_time; //緊急停止時間記録
+    
+        button = true;        
+    }
+
+    //緊急停止から2秒後に記録終了
+    if(button == true && current_time > stop_time + 2000){
+        myFile.println("--- This experiment was finished by an emergency stop ---");
+        myFile.close();
+        Serial.println("Sampling has been finished !");
+        Serial.end();
+        Timer.stop();
+
+        Timer.detachInterrupt();
+    }  
 
     //endtime -> stop 
     if(current_time > endtime){        
@@ -698,6 +712,9 @@ void setup() {
         while(1);
     }
 
+    //非常停止スイッチ      
+    pinMode(buttonPin, INPUT_PULLUP);     
+
     setVelocityBasedProfile();
     initializeFL();
     initializeFR();
@@ -773,7 +790,16 @@ void setup() {
         else{ //Wheel
             dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, 0, &dxl_error);
         }
-    }  
+    }
+
+    //非常停止スイッチを押していないか
+    buttonState = digitalRead(buttonPin); //ボタンの状態読み取り
+    if(buttonState == buttonPush){ //押していたら警告
+        Serial.println();
+        Serial.println("Don't press the emergency button");
+        Serial.println();
+    }
+
 
     //motor data書き込み
     myFile = SD.open(LOG_FILE, FILE_WRITE); 
@@ -786,7 +812,7 @@ void setup() {
 
     Serial.println();
     Serial.println("Waiting for m key input -> wheel moving");
-    Serial.println("Emergency stop -> Press e ");
+ 
     while (1){
         char input = 'i';
         if (Serial.available() > 0){
