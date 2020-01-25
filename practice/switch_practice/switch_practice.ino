@@ -1,8 +1,8 @@
 /* 車輪走行のデータ取得用プログラム
+   Time-basedにしてみた
 　(Dynamixel 5個で行うテスト用)
 　 _秒待ってから設定速度(Valu)で_秒車輪走行
    減速開始から_秒後までデータ取得
-   LED光らせようとしてるけどうまく行かない
  */
 #include <MyRobot.h>
 #include <SD.h>
@@ -10,11 +10,6 @@
 
 #define BAUDRATE                        2000000
 #define DEVICENAME                      "/dev/ttyACM0"
-
-//加速
-#define WHEEL_PROFILE_ACCELERATION 30
-//減速（緊急停止時）
-#define WHEEL_PROFILE_DECELERATION 100
 
 #define SCAN_RATE 50000 //[us]
 
@@ -27,18 +22,13 @@ double target_velocity = convertValue2Rpm(target_value);
 void ReadData(int32_t *q_, int16_t *current_, uint16_t *voltage_);
 void WriteData(int32_t *q_, int16_t *current_, uint16_t *voltage_);
 void WriteInitialInfo(double target_velocity_);
+void setProfileValue(uint8_t id, uint32_t ProfileVel, uint32_t ProfileAcc);
 
 bool isInitializeDone(void);
-void setVelocityBasedProfile(void);
+void setTimeBasedProfile(void);
 
-void initializeFL(void);
-void initializeFR(void);
-void initializeBL(void);
-void initializeBR(void);
-void enableFLTorque(void);
-void enableFRTorque(void);
-void enableBLTorque(void);
-void enableBRTorque(void);
+void initialize(void);
+void enableTorque(void);
 
 bool initializeFlag[5];
 
@@ -67,7 +57,7 @@ double initialPose[5] = {
 
 //Time settings
 double current_time = 0; //現在時間[ms]
-double waiting_time = 3000; //走行開始時間[ms]
+double waiting_time = 2000; //走行開始時間[ms]
 double endtime = 8000; //停止時間[ms]
 double sampling_end = 12000; //記録時間[ms]
 double stop_time = 0; //緊急停止時間記録用[ms]
@@ -165,25 +155,22 @@ void WheelMove(void){
 
     //3sec -> start 
     if(current_time > waiting_time && flag == false){
-      dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
-      //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
-      //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
-      //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
-      flag = true;
+        setProfileValue(4, 0, 4000); // Velocity Control Mode only uses Profile Acceleration
+        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 4, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 9, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 14, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 19, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
+        flag = true;
     }
 
     //緊急停止
     if (buttonState == buttonPush && button == false){ //ボタンON
         //停止までの時間を短く
-        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
-        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
-        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
-        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_DECELERATION, &dxl_error);
-
-        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        setProfileValue(4, 0, 500); //Velocity Control Mode only uses Profile Acceleration
+        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 4, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 9, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 14, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 19, ADDR_GOAL_VELOCITY, 0, &dxl_error);
 
         Serial.println("Emergency stop !!!");
         myFile.println("Emergency stop time !!!"); //緊急停止した時刻をSDカードに
@@ -206,11 +193,12 @@ void WheelMove(void){
 
     //8sec -> stop 
     if(current_time > endtime){
+        setProfileValue(4, 0, 1500); //Velocity Control Mode only uses Profile Acceleration
         // Setting Target Velocity
-        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 4, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 9, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 14, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 19, ADDR_GOAL_VELOCITY, 0, &dxl_error);
     }
 
     //sampling_end -> sampling stop
@@ -269,400 +257,75 @@ void ReadInitialState(int32_t *q_, int16_t *current_, uint16_t *voltage_){
     myFile.println();
 }
 
-//VelocityBased-Profileモード
-void setVelocityBasedProfile(void){
+
+/**   指定したモータをTimeBased-Controlモードに設定する   **/
+void setTimeBasedProfile(void){
     for(int i = 0; i < 5; i++){
         //DriveModeを読み込んで
-        const uint8_t VelocityBased_Data = 0b11111011;
+        const uint8_t TimeBased_Data = 0b00000100;
         uint8_t DriveMode_buffer;
         //現在のDriveModeを読み込む
         dxl_comm_result = packetHandler->read1ByteTxRx(portHandler, i, ADDR_DRIVE_MODE, &DriveMode_buffer, &dxl_error);
-        //Bit2を消す
-        DriveMode_buffer = DriveMode_buffer & VelocityBased_Data;
+        //Bit2を立てる
+        DriveMode_buffer = DriveMode_buffer | TimeBased_Data;
         //新しいDriveModeを書き込む
         dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, i, ADDR_DRIVE_MODE, DriveMode_buffer, &dxl_error);
     }
 }
 
-void initializeFL(void){
-    //initialize FL_Switch -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_SWITCH_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_SWITCH_ID, ADDR_MAX_POSITION_LIMIT, MAX_POSITION_VALUE, &dxl_error);
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_SWITCH_ID, ADDR_MIN_POSITION_LIMIT, MIN_POSITION_VALUE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_SWITCH_ID, ADDR_POSITION_P_GAIN, SWITCH_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_SWITCH_ID, ADDR_POSITION_I_GAIN, SWITCH_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_SWITCH_ID, ADDR_POSITION_D_GAIN, SWITCH_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_SWITCH_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_SWITCH_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_SWITCH_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-    //initialize FL_Yall --uint8_t *id_, -----------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_YALL_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_YALL_ID, ADDR_POSITION_P_GAIN, YALL_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_YALL_ID, ADDR_POSITION_I_GAIN, YALL_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_YALL_ID, ADDR_POSITION_D_GAIN, YALL_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_YALL_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_YALL_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_YALL_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-    //initialize FL_Hip -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_HIP_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_HIP_ID, ADDR_POSITION_P_GAIN, HIP_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_HIP_ID, ADDR_POSITION_I_GAIN, HIP_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_HIP_ID, ADDR_POSITION_D_GAIN, HIP_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_HIP_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_HIP_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_HIP_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-
-    //initialize FL_Knee -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_KNEE_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_KNEE_ID, ADDR_MAX_POSITION_LIMIT, MAX_POSITION_VALUE, &dxl_error);
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_KNEE_ID, ADDR_MIN_POSITION_LIMIT, MIN_POSITION_VALUE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_KNEE_ID, ADDR_POSITION_P_GAIN, KNEE_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_KNEE_ID, ADDR_POSITION_I_GAIN, KNEE_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_KNEE_ID, ADDR_POSITION_D_GAIN, KNEE_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_KNEE_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_KNEE_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_KNEE_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-    //initialize FL_Wheel -------------------------------------------------------------------
-    //Setting Operating Mode to Velocity-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_OPERATING_MODE, VELOCITY_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_VELOCITY_P_GAIN, WHEEL_VELOCITY_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_VELOCITY_I_GAIN, WHEEL_VELOCITY_I_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_LED, LED_ON, &dxl_error);
-    // Setting Velocity Limit
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_VELOCITY_LIMIT, VELOCITY_LIMIT, &dxl_error);
-    // Setting Wheel Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_ACCELERATION, &dxl_error);
+//Profile AccelerationとProfile Veloctyを設定する関数
+void setProfileValue(uint8_t id, uint32_t ProfileVel, uint32_t ProfileAcc){
+  dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, id, ADDR_PROFILE_VELOCITY, ProfileVel, &dxl_error);
+  dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, id, ADDR_PROFILE_ACCELERATION, ProfileAcc, &dxl_error);
 }
 
-void initializeFR(void){
-    //initialize FR_Switch -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_SWITCH_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_SWITCH_ID, ADDR_POSITION_P_GAIN, SWITCH_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_SWITCH_ID, ADDR_POSITION_I_GAIN, SWITCH_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_SWITCH_ID, ADDR_POSITION_D_GAIN, SWITCH_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_SWITCH_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_SWITCH_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_SWITCH_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-    //initialize FR_Yall -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_YALL_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_YALL_ID, ADDR_POSITION_P_GAIN, YALL_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_YALL_ID, ADDR_POSITION_I_GAIN, YALL_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_YALL_ID, ADDR_POSITION_D_GAIN, YALL_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_YALL_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_YALL_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_YALL_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-    //initialize FR_Hip -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_HIP_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_HIP_ID, ADDR_POSITION_P_GAIN, HIP_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_HIP_ID, ADDR_POSITION_I_GAIN, HIP_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_HIP_ID, ADDR_POSITION_D_GAIN, HIP_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_HIP_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_HIP_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_HIP_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-    //initialize FR_Knee -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_KNEE_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_KNEE_ID, ADDR_POSITION_P_GAIN, KNEE_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_KNEE_ID, ADDR_POSITION_I_GAIN, KNEE_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_KNEE_ID, ADDR_POSITION_D_GAIN, KNEE_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_KNEE_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_KNEE_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_KNEE_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-    //initialize FR_Wheel -------------------------------------------------------------------
-    //Setting Operating Mode to Velocity-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_OPERATING_MODE, VELOCITY_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_VELOCITY_P_GAIN, WHEEL_VELOCITY_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_VELOCITY_I_GAIN, WHEEL_VELOCITY_I_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_LED, LED_ON, &dxl_error);
-    // Setting Velocity Limit
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_VELOCITY_LIMIT, VELOCITY_LIMIT, &dxl_error);
-    // Setting Wheel Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_ACCELERATION, &dxl_error);
+void initialize(void){
+    for (int i = 0; i < 5; i++){
+        if(i % 5 != 4){ //leg
+            //Setting Operating Mode to Position-Control-Mode
+            dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, i, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_MAX_POSITION_LIMIT, MAX_POSITION_VALUE, &dxl_error);
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_MIN_POSITION_LIMIT, MIN_POSITION_VALUE, &dxl_error);
+            // Setting Position P Gain
+            dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, i, ADDR_POSITION_P_GAIN, SWITCH_POSITION_P_GAIN, &dxl_error);
+            // Setting Position I Gain
+            dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, i, ADDR_POSITION_I_GAIN, SWITCH_POSITION_I_GAIN, &dxl_error);
+            // Setting Position D Gain
+            dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, i, ADDR_POSITION_D_GAIN, SWITCH_POSITION_D_GAIN, &dxl_error);
+            // LED
+            dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, i, ADDR_LED, LED_ON, &dxl_error);
+        }
+        else{ //Wheel
+            //Setting Operating Mode to Velocity-Control-Mode
+            dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, i, ADDR_OPERATING_MODE, VELOCITY_CONTROL_MODE, &dxl_error);
+            // Setting Position P Gain
+            dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, i, ADDR_VELOCITY_P_GAIN, WHEEL_VELOCITY_P_GAIN, &dxl_error);
+            // Setting Position I Gain
+            dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, i, ADDR_VELOCITY_I_GAIN, WHEEL_VELOCITY_I_GAIN, &dxl_error);
+            // LED
+            dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, i, ADDR_LED, LED_ON, &dxl_error);
+            // Setting Velocity Limit
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_VELOCITY_LIMIT, VELOCITY_LIMIT, &dxl_error);
+        }
+    }
 }
 
-void initializeBL(void){
-    //initialize BL_Switch -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_SWITCH_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_SWITCH_ID, ADDR_POSITION_P_GAIN, SWITCH_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_SWITCH_ID, ADDR_POSITION_I_GAIN, SWITCH_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_SWITCH_ID, ADDR_POSITION_D_GAIN, SWITCH_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_SWITCH_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_SWITCH_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_SWITCH_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
 
-    //initialize BL_Yall -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_YALL_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_YALL_ID, ADDR_POSITION_P_GAIN, YALL_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_YALL_ID, ADDR_POSITION_I_GAIN, YALL_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_YALL_ID, ADDR_POSITION_D_GAIN, YALL_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_YALL_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_YALL_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_YALL_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-
-    //initialize BL_Hip -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_HIP_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_HIP_ID, ADDR_POSITION_P_GAIN, HIP_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_HIP_ID, ADDR_POSITION_I_GAIN, HIP_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_HIP_ID, ADDR_POSITION_D_GAIN, HIP_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_HIP_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_HIP_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_HIP_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-
-    //initialize BL_Knee -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_KNEE_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_KNEE_ID, ADDR_POSITION_P_GAIN, KNEE_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_KNEE_ID, ADDR_POSITION_I_GAIN, KNEE_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_KNEE_ID, ADDR_POSITION_D_GAIN, KNEE_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_KNEE_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_KNEE_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_KNEE_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-
-    //initialize BL_Wheel -------------------------------------------------------------------
-    //Setting Operating Mode to Velocity-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_OPERATING_MODE, VELOCITY_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_VELOCITY_P_GAIN, WHEEL_VELOCITY_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_VELOCITY_I_GAIN, WHEEL_VELOCITY_I_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_LED, LED_ON, &dxl_error);
-    // Setting Velocity Limit
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_VELOCITY_LIMIT, VELOCITY_LIMIT, &dxl_error);
-    // Setting Wheel Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_ACCELERATION, &dxl_error);
+void enableTorque(void){
+    for (int i = 0; i < 5; i++){
+        if(i % 5 != 4){ //leg
+            // Enable FL Switch Dynamixel Torque
+            dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, i, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
+        }
+        else{ //Wheel
+            // Enable FL Wheel Dynamixel Torque
+            dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, i, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
+            // Setting Target Velocity
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+        }
+    }
 }
 
-void initializeBR(void){
-    //initialize BR_Switch -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_SWITCH_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_SWITCH_ID, ADDR_POSITION_P_GAIN, SWITCH_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_SWITCH_ID, ADDR_POSITION_I_GAIN, SWITCH_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_SWITCH_ID, ADDR_POSITION_D_GAIN, SWITCH_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_SWITCH_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_SWITCH_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_SWITCH_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-    //initialize BR_Yall -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_YALL_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_YALL_ID, ADDR_POSITION_P_GAIN, YALL_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_YALL_ID, ADDR_POSITION_I_GAIN, YALL_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_YALL_ID, ADDR_POSITION_D_GAIN, YALL_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_YALL_ID, ADDR_LED, LED_ON, &dxl_error);
-        //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_YALL_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_YALL_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-
-    //initialize BR_Hip -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_HIP_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_HIP_ID, ADDR_POSITION_P_GAIN, HIP_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_HIP_ID, ADDR_POSITION_I_GAIN, HIP_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_HIP_ID, ADDR_POSITION_D_GAIN, HIP_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_HIP_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_HIP_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_HIP_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-
-    //initialize BR_Knee -------------------------------------------------------------------
-    //Setting Operating Mode to Position-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_KNEE_ID, ADDR_OPERATING_MODE, EXTENDTED_POSITION_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_KNEE_ID, ADDR_POSITION_P_GAIN, KNEE_POSITION_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_KNEE_ID, ADDR_POSITION_I_GAIN, KNEE_POSITION_I_GAIN, &dxl_error);
-    // Setting Position D Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_KNEE_ID, ADDR_POSITION_D_GAIN, KNEE_POSITION_D_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_KNEE_ID, ADDR_LED, LED_ON, &dxl_error);
-    //Profile Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_KNEE_ID, ADDR_PROFILE_VELOCITY, PROFILE_VELOCITY, &dxl_error);
-    //Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_KNEE_ID, ADDR_PROFILE_ACCELERATION, PROFILE_ACCELERATION, &dxl_error);
-
-    //initialize BR_Wheel -------------------------------------------------------------------
-    //Setting Operating Mode to Velocity-Control-Mode
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_OPERATING_MODE, VELOCITY_CONTROL_MODE, &dxl_error);
-    // Setting Position P Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_VELOCITY_P_GAIN, WHEEL_VELOCITY_P_GAIN, &dxl_error);
-    // Setting Position I Gain
-    dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_VELOCITY_I_GAIN, WHEEL_VELOCITY_I_GAIN, &dxl_error);
-    // LED
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_LED, LED_ON, &dxl_error);
-    // Setting Velocity Limit
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_VELOCITY_LIMIT, VELOCITY_LIMIT, &dxl_error);
-    // Setting Wheel Profile Acceleration
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_PROFILE_ACCELERATION, WHEEL_PROFILE_ACCELERATION, &dxl_error);
-}
-
-void enableFLTorque(void){
-    // Enable FL Switch Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_SWITCH_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable FL Yall Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_YALL_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable FL Hip Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_HIP_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable FL Knee Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_KNEE_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable FL Wheel Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Setting Target Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-    //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FL_WHEEL_ID, ADDR_GOAL_PWM, 855, &dxl_error);
-}
-
-void enableFRTorque(void){
-    // Enable FR Switch Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_SWITCH_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable FR Yall Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_YALL_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable FR Hip Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_HIP_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable FR Knee Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_KNEE_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable FR Wheel Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Setting Target Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-    //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, FR_WHEEL_ID, ADDR_GOAL_PWM, 855, &dxl_error);
-}
-
-void enableBLTorque(void){
-    // Enable BL Switch Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_SWITCH_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable BL Yall Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_YALL_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable BL Hip Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_HIP_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable BL Knee Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_KNEE_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable BL Wheel Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Setting Target Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-    //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BL_WHEEL_ID, ADDR_GOAL_PWM, 855, &dxl_error);
-}
-
-void enableBRTorque(void){
-    // Enable BR Switch Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_SWITCH_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable BR Yall Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_YALL_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable BR Hip Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_HIP_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable BR Knee Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_KNEE_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Enable BR Wheel Dynamixel Torque
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-    // Setting Target Velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_VELOCITY, 0, &dxl_error);
-    //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, BR_WHEEL_ID, ADDR_GOAL_PWM, 855, &dxl_error);
-}
 
 bool isInitializeDone(void){
     int sum = 0;
@@ -721,10 +384,8 @@ void setup() {
     pinMode(ledPin, OUTPUT);    //LED set      
     pinMode(buttonPin, INPUT_PULLUP); 
 
-    initializeFL();
-    initializeFR();
-    initializeBL();
-    initializeBR();
+    setTimeBasedProfile();
+    initialize();
 
     for (int i = 0; i < 5;i++){
         initializeFlag[i] = false;
@@ -778,13 +439,11 @@ void setup() {
         }
     }
 
-    enableFLTorque();
-    enableFRTorque();
-    enableBLTorque();
-    enableBRTorque();
+    enableTorque();
 
     /* 初期姿勢の目標角を設定 */
    for (int i = 0; i < 5; i++){
+        setProfileValue(i, 5000, 2000); //Profile_Velocity:5000 Profile_Acceleration:2000
         if(i % 5 != 4){ //leg
             if(i/10 == 0){ //Forward
                 dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i%5] * initialPose[i % 5]), &dxl_error);
