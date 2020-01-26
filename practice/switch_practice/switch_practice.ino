@@ -16,7 +16,7 @@
 #define LOG_FILE  "test.txt"
 
 //回転の速さ
-double target_value = 1023;
+int32_t target_value = 50;
 double target_velocity = convertValue2Rpm(target_value);
 
 void ReadData(int32_t *q_, int16_t *current_, uint16_t *voltage_);
@@ -155,7 +155,7 @@ void WheelMove(void){
 
     //3sec -> start 
     if(current_time > waiting_time && flag == false){
-        setProfileValue(4, 0, 4000); // Velocity Control Mode only uses Profile Acceleration
+        setProfileValue(4, 0, 1500); // Velocity Control Mode only uses Profile Acceleration
         dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 4, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
         //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 9, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
         //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 14, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
@@ -193,7 +193,7 @@ void WheelMove(void){
 
     //8sec -> stop 
     if(current_time > endtime){
-        setProfileValue(4, 0, 1500); //Velocity Control Mode only uses Profile Acceleration
+        setProfileValue(4, 0, 1000); //Velocity Control Mode only uses Profile Acceleration
         // Setting Target Velocity
         dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 4, ADDR_GOAL_VELOCITY, 0, &dxl_error);
         //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 9, ADDR_GOAL_VELOCITY, 0, &dxl_error);

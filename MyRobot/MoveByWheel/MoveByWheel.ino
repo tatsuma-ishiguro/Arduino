@@ -15,7 +15,7 @@
 #define LOG_FILE  "01.txt"
 
 //回転の速さ
-double target_value = 1023;
+int32_t target_value = 50;
 double target_velocity = convertValue2Rpm(target_value);
 
 void ReadData(int32_t *q_, int16_t *current_, uint16_t *voltage_);

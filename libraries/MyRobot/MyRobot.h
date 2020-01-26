@@ -38,8 +38,6 @@
 #define VELOCITY_LIMIT          1023
 #define MIN_POSITION_VALUE      -1048575 //-1048575~1048575
 #define MAX_POSITION_VALUE      1048575  //-256~256 revolution
-#define PROFILE_VELOCITY        50
-#define PROFILE_ACCELERATION    10
 
 
 //Gain
@@ -112,7 +110,7 @@ int convertAngle2Value(double rad){
 }
 // Velocity->Value
 int32_t convertRpm2Value(double rpm){
-    return (uint32_t)((rpm / (VELOCITY_COEFFICIENT * gearRatio[4])) + 0.5);
+    return ((rpm / (VELOCITY_COEFFICIENT * gearRatio[4])) + 0.5);
 }
 
 //Value -> Velocity
