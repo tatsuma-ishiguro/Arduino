@@ -12,7 +12,7 @@
 
 #define SCAN_RATE 50000 //[us]
 
-#define LOG_FILE  "01.txt"
+#define LOG_FILE  "0128_001.txt"
 
 //回転の速さ
 int32_t target_value = 50;
@@ -48,6 +48,7 @@ HardwareTimer Timer(TIMER_CH1);
 //Data file settings
 File myFile;
 bool flag = false;
+bool flag_stop = false;
 
 double initialPose[5] = {
     0, 0, M_PI / 6, -M_PI/3, 0
@@ -56,8 +57,8 @@ double initialPose[5] = {
 //Time settings
 double current_time = 0; //現在時間[ms]
 double waiting_time = 3000; //走行開始時間[ms]
-double endtime = 8000; //停止時間[ms]
-double sampling_end = 12000; //記録時間[ms]
+double endtime = 9000; //停止時間[ms]
+double sampling_end = 15000; //記録時間[ms]
 double stop_time = 0; //緊急停止時間記録用[ms]
 
 //データ取得用配列
@@ -147,6 +148,14 @@ void WheelMove(void){
     current_time += SCAN_RATE /1000;
 
     Serial.println(current_time);
+    Serial.print("  ");
+    Serial.println(q[4]);
+    Serial.print("  ");
+    Serial.println(q[9]);
+    Serial.print("  ");
+    Serial.println(q[14]);
+    Serial.print("  ");
+    Serial.println(q[19]);
 
     buttonState = digitalRead(buttonPin); //ボタンの状態読み取り
 
@@ -154,7 +163,7 @@ void WheelMove(void){
     if(current_time > waiting_time && flag == false){
         for(int i = 0; i < NUMJOINTS; i++){
             if(i % 5 == 4){
-                setProfileValue(i, 0, 4000); // Velocity Control Mode only uses Profile Acceleration
+                setProfileValue(i, 0, 3000); // Velocity Control Mode only uses Profile Acceleration
                 dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
                 flag = true;
             }
@@ -190,14 +199,15 @@ void WheelMove(void){
     }  
 
     //endtime -> stop 
-    if(current_time > endtime){
+    if(current_time > endtime && flag_stop = false){
         for(int i = 0; i < NUMJOINTS; i++){
             if(i % 5 == 4){
                 //停止までの時間を短く
-                setProfileValue(i, 0, 1500); //Velocity Control Mode only uses Profile Acceleration
+                setProfileValue(i, 0, 3000); //Velocity Control Mode only uses Profile Acceleration
                 dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, 0, &dxl_error);
             }
         }
+        flag_stop = true;
     }
 
     //sampling_end -> sampling stop
@@ -467,6 +477,7 @@ void setup() {
     myFile.println();
     
     delay(500);
+    WriteInitialInfo(target_velocity);
     ReadInitialState(q, current, voltage);
 
     Serial.println();

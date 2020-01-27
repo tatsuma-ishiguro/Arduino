@@ -16,7 +16,7 @@
 #define LOG_FILE  "test.txt"
 
 //回転の速さ
-int32_t target_value = 50;
+int32_t target_value = 300;
 double target_velocity = convertValue2Rpm(target_value);
 
 void ReadData(int32_t *q_, int16_t *current_, uint16_t *voltage_);
@@ -50,6 +50,7 @@ HardwareTimer Timer(TIMER_CH1);
 //Data file settings
 File myFile;
 bool flag = false;
+bool flag_stop = false;
 
 double initialPose[5] = {
     0, 0, M_PI / 6, -M_PI/3, 0
@@ -57,9 +58,9 @@ double initialPose[5] = {
 
 //Time settings
 double current_time = 0; //現在時間[ms]
-double waiting_time = 2000; //走行開始時間[ms]
-double endtime = 8000; //停止時間[ms]
-double sampling_end = 12000; //記録時間[ms]
+double waiting_time = 3000; //走行開始時間[ms]
+double endtime = 9000; //停止時間[ms]
+double sampling_end = 15000; //記録時間[ms]
 double stop_time = 0; //緊急停止時間記録用[ms]
 
 //データ取得用配列
@@ -148,14 +149,16 @@ void WheelMove(void){
     WriteData(q, current, voltage);
     current_time += SCAN_RATE /1000;
 
-    Serial.println(current_time);
+    Serial.print(current_time);
+    Serial.print("  ");
+    Serial.println(q[4]);
 
     buttonState = digitalRead(buttonPin); //ボタンの状態読み取り
 
 
     //3sec -> start 
     if(current_time > waiting_time && flag == false){
-        setProfileValue(4, 0, 1500); // Velocity Control Mode only uses Profile Acceleration
+        setProfileValue(4, 0, 3000); // Velocity Control Mode only uses Profile Acceleration
         dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 4, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
         //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 9, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
         //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 14, ADDR_GOAL_VELOCITY, target_value, &dxl_error);
@@ -192,13 +195,15 @@ void WheelMove(void){
     }
 
     //8sec -> stop 
-    if(current_time > endtime){
-        setProfileValue(4, 0, 1000); //Velocity Control Mode only uses Profile Acceleration
+    if(current_time > endtime && flag_stop == false){
+        setProfileValue(4, 0, 3000); //Velocity Control Mode only uses Profile Acceleration
         // Setting Target Velocity
         dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 4, ADDR_GOAL_VELOCITY, 0, &dxl_error);
         //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 9, ADDR_GOAL_VELOCITY, 0, &dxl_error);
         //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 14, ADDR_GOAL_VELOCITY, 0, &dxl_error);
         //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 19, ADDR_GOAL_VELOCITY, 0, &dxl_error);
+
+        flag_stop = true;
     }
 
     //sampling_end -> sampling stop
@@ -473,6 +478,7 @@ void setup() {
     myFile.println();
     
     delay(500);
+    WriteInitialInfo(target_velocity);
     ReadInitialState(q, current, voltage);
 
     Serial.println();
