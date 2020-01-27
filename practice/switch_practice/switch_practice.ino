@@ -17,7 +17,7 @@
 
 //回転の速さ
 int32_t target_value = 300;
-double target_velocity = convertValue2Rpm(target_value);
+double target_velocity = convertValue2mpers(target_value);
 
 void ReadData(int32_t *q_, int16_t *current_, uint16_t *voltage_);
 void WriteData(int32_t *q_, int16_t *current_, uint16_t *voltage_);
@@ -78,7 +78,7 @@ void WriteInitialInfo(double target_velocity_){
   myFile.println(SCAN_RATE);
   
   //設定した振幅を記入
-  myFile.print("velocity[rpm] = ");
+  myFile.print("velocity[m/s] = ");
   myFile.println(target_velocity_);
 
   //

@@ -118,4 +118,9 @@ double convertValue2Rpm(int32_t val){
     return (val * VELOCITY_COEFFICIENT * gearRatio[4]);
 }
 
+//Value -> Velocity
+double convertValue2mpers(int32_t val){
+    return ((val * VELOCITY_COEFFICIENT * 0.15 * M_PI) / (gearRatio[4] * 60));
+}
+
 #endif
