@@ -191,7 +191,7 @@ void WheelMove(void){
     }  
 
     //endtime -> stop 
-    if(current_time > endtime && flag_stop = false){
+    if(current_time > endtime && flag_stop == false){
         for(int i = 0; i < NUMJOINTS; i++){
             if(i % 5 == 4){
                 //停止までの時間を短く

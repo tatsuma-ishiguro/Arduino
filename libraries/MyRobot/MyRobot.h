@@ -82,6 +82,11 @@ const int cs = 10;
 
 #define OFFSET_FILE "OFFSET.txt" //オフセットの設定ファイル(変更するな！)
 
+//Wheel Parameters
+#define WheelBase 0.70//前後の車輪間隔）
+#define WheelTrack 0.45//左右の車輪間隔）
+#define WheelDiameter 0.15 //車輪直径
+
 
 //初期姿勢の角度
 //行は各脚の部位(switch, yall hip knee wheel)，列は脚の位置を表す(FL,FR,BL,BR)
@@ -108,19 +113,46 @@ double gearRatio[5] = {
 int convertAngle2Value(double rad){
     return 4095 * rad / (2 * M_PI);
 }
-// Velocity->Value
+
+//Angular_velocity[rad/s]->Velocity[rpm]
+int32_t convertRads2Rpm(double omega){
+    return ((omega * 30) / M_PI);
+}
+
+// Velocity[rpm]->Value
 int32_t convertRpm2Value(double rpm){
     return ((rpm / (VELOCITY_COEFFICIENT * gearRatio[4])) + 0.5);
 }
 
-//Value -> Velocity
+//Value -> Velocity[rpm]
 double convertValue2Rpm(int32_t val){
     return (val * VELOCITY_COEFFICIENT * gearRatio[4]);
 }
 
-//Value -> Velocity
+//Value -> Velocity[m/s]
 double convertValue2mpers(int32_t val){
     return ((val * VELOCITY_COEFFICIENT * 0.15 * M_PI) / (gearRatio[4] * 60));
 }
+
+//Right side Yaw Angle of Turning
+double AngleofYawRightside(int32_t radius){
+    return asin(((WheelBase / 2 ) / ( radius - (WheelTrack / 2))));
+}
+
+//Left side Yaw Angle of Turning
+double AngleofYawLeftside(int32_t radius){
+    return asin(((WheelBase / 2 ) / ( radius + (WheelTrack / 2))));
+}
+
+//Right side Wheel Angle Velocity of Turning
+double AngleVelocityRightsideWheel(int32_t radius, int32_t velocity){
+    return (((2 * velocity) / (radius / WheelDiameter)) * (radius + (WheelTrack / 2)));
+}
+
+//Left side Wheel Angle Velocity of Turning
+double AngleVelocityLetsideWheel(int32_t radius, int32_t velocity){
+    return (((2 * velocity) / (radius / WheelDiameter)) * (radius - (WheelTrack / 2)));
+}
+
 
 #endif
