@@ -1,7 +1,7 @@
 /* 車輪走行のデータ取得用プログラム
    Drine ModeをTime-based Profileに変更
-　 3秒待ってからtarget_valueの速度(MAX Valu=1023)で5秒車輪走行
-   減速開始から4秒後までデータ取得
+　 3秒待ってからtarget_valueの速度(MAX Valu=1023)で3秒車輪走行
+   減速開始から6秒後までデータ取得
  */
 #include <MyRobot.h>
 #include <SD.h>
