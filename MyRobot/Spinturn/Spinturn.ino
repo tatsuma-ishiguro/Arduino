@@ -1,7 +1,4 @@
-/* 車輪走行のデータ取得用プログラム
-   Drine ModeをTime-based Profileに変更
-　 3秒待ってからtarget_valueの速度(MAX Valu=1023)で5秒車輪走行
-   減速開始から4秒後までデータ取得
+/* 超信地旋回のデータ取得用プログラム
  */
 #include <tatsuMyRobot.h>
 #include <SD.h>
@@ -19,7 +16,6 @@
 
 //Wheel
 int32_t target_value = 33; //車輪の回転速度
-double turning_radius = 10; //旋回半径
 double target_velocity = convertValue2mpers(target_value);
 
 
@@ -60,6 +56,8 @@ File myFile;
 bool flag = false;
 bool flag_stop = false;
 
+
+
 //Time settings
 double current_time = 0; //現在時間[ms]
 double waiting_time = 3000; //走行開始時間[ms]
@@ -99,47 +97,32 @@ void WriteInitialInfo(double target_velocity_, double turning_radius_){
 }
 
 
-//Yaw Angle of Turning
-void AngleofYaw(int32_t radius){//Yaw軸の傾きは各脚によって異なる
+//超信地旋回モード
+void AngleofYaw(void){
     double Angle;
     double Radians;
+    Angle = atan2(WheelBase, WheelTrack);
+    Radians = Angle * M_PI / 180; //Angle -> Radians
     for(int i = 0; i < NUMJOINTS; i++){
         setProfileValue(i, 3000, 1000); //(ID,Profile_Velocity,Profile_Acceleration)
-        if(i == 1){
-            Angle = asin((WheelBase / 2 ) / ( radius + (DIRECTION_OF_ROTATION * (WheelTrack / 2))));
-            Radians = Angle * M_PI / 180; //Angle -> Radians
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
+        if(i == 1 || i == 16){//CW(負回転)
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + (-1) * convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
         }
-        if(i == 6){
-            Angle = asin((WheelBase / 2 ) / ( radius - (DIRECTION_OF_ROTATION * (WheelTrack / 2))));
-            Radians = Angle * M_PI / 180;
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
-        }
-        if(i == 11){
-            Angle = asin((WheelBase / 2 ) / ( radius + (DIRECTION_OF_ROTATION * (WheelTrack / 2))));
-            Radians = (-1) * Angle * M_PI / 180;
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
-        }
-        if(i == 16){
-            Angle = asin((WheelBase / 2 ) / ( radius - (DIRECTION_OF_ROTATION * (WheelTrack / 2))));
-            Radians = (-1) * Angle * M_PI / 180;
+        if(i == 6 || i == 11){//CCW(正回転)
             dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
         }
     }
 }
 
-//Wheel Velocity of turning
-void VelocityWheel(int32_t radius,int32_t velocity){
-    double WheelVelocity;
+//旋回速度
+void VelocityWheel(int32_t velocity){
     for(int i = 0; i < NUMJOINTS; i++){
         setProfileValue(i, 0, 3000); // Velocity Control Mode only uses Profile Acceleration
-        if(i % 10 == 4){//left side wheel
-            WheelVelocity = (velocity / radius) * (radius + (DIRECTION_OF_ROTATION * (WheelTrack / 2))); //[m/s]
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, convertRpm2Value(WheelVelocity * 60 / (2 * M_PI)), &dxl_error);
+        if(i % 10 == 4){//left side wheel -> 正回転
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, velocity, &dxl_error);
         }
-        if(i % 10 == 9){//right side wheel
-            WheelVelocity = (velocity / radius) * (radius - (DIRECTION_OF_ROTATION * (WheelTrack / 2))); //[m/s]
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, convertRpm2Value(WheelVelocity * 60 / (2 * M_PI)), &dxl_error);
+        if(i % 10 == 9){//right side wheel -> 逆回転
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, velocity, &dxl_error);
         }
     }
 }
@@ -207,7 +190,7 @@ void WheelMoveturning(void){
 
     //waiting_time -> start 
     if(current_time > waiting_time && flag == false){
-        VelocityWheel(turning_radius,target_value);
+        VelocityWheel(target_value);
         flag = true;
     }
 
@@ -534,7 +517,7 @@ void setup() {
     Serial.println("Yaw axis rotation !");
 
     /* 旋回に向けてYaw軸を回転 */
-    AngleofYaw(turning_radius);
+    AngleofYaw();
 
 
 
@@ -563,3 +546,7 @@ void setup() {
 void loop() {
     
 }
+
+
+
+

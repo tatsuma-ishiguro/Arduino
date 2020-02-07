@@ -89,14 +89,8 @@ const int cs = 10;
 
 
 //初期姿勢の角度
-//行は各脚の部位(switch, yall hip knee wheel)，列は脚の位置を表す(FL,FR,BL,BR)
-double q_init[5][LEGNUM] = {
-    //       FL          FR         BL         BR
-    {        0,          0,         0,         0},
-    {        0,          0,         0,         0},
-    { M_PI / 6,   M_PI / 6, -M_PI / 6, -M_PI / 6},
-    {-M_PI / 3,  -M_PI / 3,  M_PI / 3,  M_PI / 3},
-    {        0,          0,         0,         0}
+double initialPose[5] = {
+    0, 0, M_PI / 6, -M_PI/3, 0
 };
 
 double L1 = 0.252;
