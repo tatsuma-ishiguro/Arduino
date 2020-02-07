@@ -36,7 +36,7 @@ void initialize(void);
 void enableTorque(void);
 
 bool initializeFlag[NUMJOINTS];
-
+　
 int32_t position_init[NUMJOINTS]; //各関節の初期限界角度
 
 //非常停止スイッチはNC
