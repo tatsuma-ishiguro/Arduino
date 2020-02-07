@@ -119,10 +119,10 @@ void VelocityWheel(int32_t velocity){
     for(int i = 0; i < NUMJOINTS; i++){
         setProfileValue(i, 0, 3000); // Velocity Control Mode only uses Profile Acceleration
         if(i % 10 == 4){//left side wheel -> 正回転
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, velocity, &dxl_error);
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, DIRECTION_OF_ROTATION * velocity, &dxl_error);
         }
         if(i % 10 == 9){//right side wheel -> 逆回転
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, velocity, &dxl_error);
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, DIRECTION_OF_ROTATION * (-1) * velocity, &dxl_error);
         }
     }
 }
