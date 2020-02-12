@@ -1,4 +1,5 @@
-/* 超信地旋回のデータ取得用プログラム
+/* 横移動のプログラム（簡易）
+   機体の向きを変えずに左右移動
  */
 #include <tatsuMyRobot.h>
 #include <SD.h>
@@ -10,7 +11,7 @@
 
 #define SCAN_RATE 50000 //[us]
 
-#define LOG_FILE  "0128_001.txt"
+#define LOG_FILE  "_001.txt"
 
 #define DIRECTION_OF_MOVEMENT   1 //右移動=1,左移動=-1
 
@@ -62,7 +63,7 @@ bool flag_stop = false;
 double current_time = 0; //現在時間[ms]
 double waiting_time = 3000; //走行開始時間[ms]
 double endtime = 9000; //停止時間[ms]
-double sampling_end = 15000; //記録時間[ms]
+double sampling_end = 12000; //記録時間[ms]
 double stop_time = 0; //緊急停止時間記録用[ms]
 
 //データ取得用配列
@@ -100,11 +101,12 @@ void WriteInitialInfo(double target_velocity_, double turning_radius_){
 //横移動モード
 void AngleofYaw(void){
     for(int i = 0; i < NUMJOINTS; i++){
-        setProfileValue(i, 3000, 1000); //(ID,Profile_Velocity,Profile_Acceleration)
         if(i == 1 || i == 16){//CW(負回転)
+            setProfileValue(i, 3000, 1000); //(ID,Profile_Velocity,Profile_Acceleration)
             dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + convertAngle2Value(gearRatio[i % 5] * (-M_PI / 2)), &dxl_error);
         }
         if(i == 6 || i == 11){//CCW(正回転)
+            setProfileValue(i, 3000, 1000); //(ID,Profile_Velocity,Profile_Acceleration)
             dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + convertAngle2Value(gearRatio[i % 5] * (M_PI / 2)), &dxl_error);
         }
     }
@@ -113,11 +115,12 @@ void AngleofYaw(void){
 //移動速度
 void VelocityWheel(int32_t velocity){
     for(int i = 0; i < NUMJOINTS; i++){
-        setProfileValue(i, 0, 3000); // Velocity Control Mode only uses Profile Acceleration
         if(i == 4 || i == 19){//逆回転
+            setProfileValue(i, 0, 3000); // Velocity Control Mode only uses Profile Acceleration
             dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, DIRECTION_OF_MOVEMENT * (-1) * velocity, &dxl_error);
         }
         if(i == 9 || i == 14){//正回転
+            setProfileValue(i, 0, 3000); // Velocity Control Mode only uses Profile Acceleration
             dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_VELOCITY, DIRECTION_OF_MOVEMENT * velocity, &dxl_error);
         }
     }
@@ -399,10 +402,10 @@ void setup() {
     myFile.close();
 
     //Check File
-    if(SD.exists(LOG_FILE)){
+    /*if(SD.exists(LOG_FILE)){
         Serial.println("The same name file has already exist !!");
         while(1);
-    }
+    }*/
 
     //非常停止スイッチ      
     pinMode(buttonPin, INPUT_PULLUP);     

@@ -1,7 +1,4 @@
-/* 車輪走行のデータ取得用プログラム
-   Drine ModeをTime-based Profileに変更
-　 3秒待ってからtarget_valueの速度(MAX Valu=1023)で5秒車輪走行
-   減速開始から4秒後までデータ取得
+/* 旋回のデータ取得用プログラム
  */
 #include <tatsuMyRobot.h>
 #include <SD.h>
@@ -64,7 +61,7 @@ bool flag_stop = false;
 double current_time = 0; //現在時間[ms]
 double waiting_time = 3000; //走行開始時間[ms]
 double endtime = 9000; //停止時間[ms]
-double sampling_end = 15000; //記録時間[ms]
+double sampling_end = 12000; //記録時間[ms]
 double stop_time = 0; //緊急停止時間記録用[ms]
 
 //データ取得用配列
