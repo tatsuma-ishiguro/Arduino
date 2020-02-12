@@ -3,7 +3,7 @@
 　 3秒待ってからtarget_valueの速度(MAX Valu=1023)で3秒車輪走行
    減速開始から6秒後までデータ取得
  */
-#include <MyRobot.h>
+#include <tatsuMyRobot.h>
 #include <SD.h>
 #include <SPI.h>
 
@@ -50,9 +50,9 @@ File myFile;
 bool flag = false;
 bool flag_stop = false;
 
-double initialPose[5] = {
+/*double initialPose[5] = {
     0, 0, M_PI / 6, -M_PI/3, 0
-};
+};*/
 
 //Time settings
 double current_time = 0; //現在時間[ms]
@@ -311,7 +311,7 @@ void initialize(void){
 }
 
 void enableTorque(void){
-    for (int i = 0; i < 5; i++){
+    for (int i = 0; i < NUMJOINTS; i++){
         if(i % 5 != 4){ //leg
             // Enable FL Switch Dynamixel Torque
             dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, i, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);

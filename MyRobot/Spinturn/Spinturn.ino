@@ -8,21 +8,21 @@
 #define BAUDRATE                        2000000
 #define DEVICENAME                      "/dev/ttyACM0"
 
-#define SCAN_RATE 50000 //[us]
+#define SCAN_RATE 100000 //[us]
 
-#define LOG_FILE  "0128_001.txt"
+#define LOG_FILE  "0212_002.txt"
 
 #define DIRECTION_OF_ROTATION   1 //右回り=1,左回り=-1
 
 //Wheel
-int32_t target_value = 33; //車輪の回転速度
+int32_t target_value = 15; //車輪の回転速度
 double target_velocity = convertValue2mpers(target_value);
 
 
 //Yaw
-void AngleofYaw(int32_t radius);
+void AngleofYaw(void);
 //Velocity of each motor
-void VelocityWheel(int32_t radius,int32_t velocity);
+void VelocityWheel(int32_t velocity);
 
 void ReadData(int32_t *q_, int16_t *current_, uint16_t *voltage_);
 void WriteData(int32_t *q_, int16_t *current_, uint16_t *voltage_);
@@ -61,8 +61,8 @@ bool flag_stop = false;
 //Time settings
 double current_time = 0; //現在時間[ms]
 double waiting_time = 3000; //走行開始時間[ms]
-double endtime = 9000; //停止時間[ms]
-double sampling_end = 15000; //記録時間[ms]
+double endtime = 8000; //停止時間[ms]
+double sampling_end = 10000; //記録時間[ms]
 double stop_time = 0; //緊急停止時間記録用[ms]
 
 //データ取得用配列
@@ -71,7 +71,7 @@ int16_t current[NUMJOINTS];
 uint16_t voltage[NUMJOINTS];
 
 //SDカード内のファイルに最初にいろいろ記述する
-void WriteInitialInfo(double target_velocity_, double turning_radius_){
+void WriteInitialInfo(double target_velocity_){
   //「このファイルは屈伸させた時のデータ」というのを記載
   myFile.println("This file is the record in turning");
 
@@ -81,9 +81,7 @@ void WriteInitialInfo(double target_velocity_, double turning_radius_){
   
   //設定した振幅を記入
   myFile.print("velocity[m/s] = ");
-  myFile.println(target_velocity_);
-  myFile.print("turning_radius[m] = ");
-  myFile.println(turning_radius_);  
+  myFile.println(target_velocity_); 
 
   //
   myFile.print("Current time");
@@ -99,19 +97,18 @@ void WriteInitialInfo(double target_velocity_, double turning_radius_){
 
 //超信地旋回モード
 void AngleofYaw(void){
-    double Angle;
     double Radians;
-    Angle = atan2(WheelBase, WheelTrack);
-    Radians = Angle * M_PI / 180; //Angle -> Radians
+    Radians = atan2(WheelBase, WheelTrack); //Angle -> Radians
     for(int i = 0; i < NUMJOINTS; i++){
         setProfileValue(i, 3000, 1000); //(ID,Profile_Velocity,Profile_Acceleration)
-        if(i == 1 || i == 16){//CW(負回転)
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + (-1) * convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
+        if(i == 1 || i == 16){//CW(負回転) 
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
         }
         if(i == 6 || i == 11){//CCW(正回転)
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
         }
     }
+    Serial.println("Debug");
 }
 
 //旋回速度
@@ -403,10 +400,10 @@ void setup() {
     myFile.close();
 
     //Check File
-    if(SD.exists(LOG_FILE)){
+    /*if(SD.exists(LOG_FILE)){
         Serial.println("The same name file has already exist !!");
         while(1);
-    }
+    }*/
 
     //非常停止スイッチ      
     pinMode(buttonPin, INPUT_PULLUP);     
