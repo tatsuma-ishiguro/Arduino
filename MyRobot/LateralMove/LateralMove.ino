@@ -37,7 +37,7 @@ void initialize(void);
 void enableTorque(void);
 
 bool initializeFlag[NUMJOINTS];
-　
+
 int32_t position_init[NUMJOINTS]; //各関節の初期限界角度
 
 //非常停止スイッチはNC
@@ -101,13 +101,9 @@ void WriteInitialInfo(double target_velocity_, double turning_radius_){
 //横移動モード
 void AngleofYaw(void){
     for(int i = 0; i < NUMJOINTS; i++){
-        if(i == 1 || i == 16){//CW(負回転)
+        if(i % 5 == 1){//1,16=CW(負回転) 6,11=CCW(正回転) 
             setProfileValue(i, 3000, 1000); //(ID,Profile_Velocity,Profile_Acceleration)
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + convertAngle2Value(gearRatio[i % 5] * (-M_PI / 2)), &dxl_error);
-        }
-        if(i == 6 || i == 11){//CCW(正回転)
-            setProfileValue(i, 3000, 1000); //(ID,Profile_Velocity,Profile_Acceleration)
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + convertAngle2Value(gearRatio[i % 5] * (M_PI / 2)), &dxl_error);
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * (M_PI / 2)), &dxl_error);
         }
     }
 }
@@ -153,7 +149,7 @@ void WriteData(int32_t *q_, int16_t *current_, uint16_t *voltage_){
     
     for (int i = 0; i < NUMJOINTS; i++){
         if(i % 5 != 4){ //leg
-            myFile.print(q_[i]);
+            myFile.print(q_[i] - offset[i]);
             myFile.print(", ");
         }
         else{ //Wheel
@@ -178,7 +174,7 @@ void WriteData(int32_t *q_, int16_t *current_, uint16_t *voltage_){
     myFile.println();
 }
 
-void WheelMoveturning(void){
+void WheelLateralMove(void){
     ReadData(q, current, voltage);
     WriteData(q, current, voltage);
     current_time += SCAN_RATE /1000;
@@ -537,7 +533,7 @@ void setup() {
     
     Timer.stop(); 
     Timer.setPeriod(SCAN_RATE); //SCAN_RATEごとに
-    Timer.attachInterrupt(WheelMoveturning); //割り込みさせる関数を指定
+    Timer.attachInterrupt(WheelLateralMove); //割り込みさせる関数を指定
     Timer.start(); //割込み開始
 
 }   

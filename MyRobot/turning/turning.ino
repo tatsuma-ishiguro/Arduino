@@ -103,24 +103,20 @@ void AngleofYaw(int32_t radius){//Yaw軸の傾きは各脚によって異なる
     for(int i = 0; i < NUMJOINTS; i++){
         setProfileValue(i, 3000, 1000); //(ID,Profile_Velocity,Profile_Acceleration)
         if(i == 1){
-            Angle = asin((WheelBase / 2 ) / ( radius + (DIRECTION_OF_ROTATION * (WheelTrack / 2))));
-            Radians = Angle * M_PI / 180; //Angle -> Radians
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
+            Radians = asin((WheelBase / 2 ) / ( radius + (DIRECTION_OF_ROTATION * (WheelTrack / 2))));
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + (-1) * convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
         }
         if(i == 6){
-            Angle = asin((WheelBase / 2 ) / ( radius - (DIRECTION_OF_ROTATION * (WheelTrack / 2))));
-            Radians = Angle * M_PI / 180;
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
+            Radians = asin((WheelBase / 2 ) / ( radius - (DIRECTION_OF_ROTATION * (WheelTrack / 2))));
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
         }
         if(i == 11){
-            Angle = asin((WheelBase / 2 ) / ( radius + (DIRECTION_OF_ROTATION * (WheelTrack / 2))));
-            Radians = (-1) * Angle * M_PI / 180;
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
+            Radians = asin((WheelBase / 2 ) / ( radius + (DIRECTION_OF_ROTATION * (WheelTrack / 2))));
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
         }
         if(i == 16){
-            Angle = asin((WheelBase / 2 ) / ( radius - (DIRECTION_OF_ROTATION * (WheelTrack / 2))));
-            Radians = (-1) * Angle * M_PI / 180;
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * initialPose[i % 5]) + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
+            Radians = asin((WheelBase / 2 ) / ( radius - (DIRECTION_OF_ROTATION * (WheelTrack / 2))));
+            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + (-1) * convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
         }
     }
 }
@@ -168,7 +164,7 @@ void WriteData(int32_t *q_, int16_t *current_, uint16_t *voltage_){
     
     for (int i = 0; i < NUMJOINTS; i++){
         if(i % 5 != 4){ //leg
-            myFile.print(q_[i]);
+            myFile.print(q_[i] - offset[i]);
             myFile.print(", ");
         }
         else{ //Wheel

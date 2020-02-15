@@ -101,10 +101,7 @@ void AngleofYaw(void){
     Radians = atan2(WheelBase, WheelTrack); //Angle -> Radians
     for(int i = 0; i < NUMJOINTS; i++){
         setProfileValue(i, 3000, 1000); //(ID,Profile_Velocity,Profile_Acceleration)
-        if(i == 1 || i == 16){//CW(負回転) 
-            dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
-        }
-        if(i == 6 || i == 11){//CCW(正回転)
+        if(i % 5 == 1){//1,16=CW(負回転) 6,11=CCW(正回転) 
             dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, i, ADDR_GOAL_POSITION, position_init[i] + offset[i] + convertAngle2Value(gearRatio[i % 5] * Radians), &dxl_error);
         }
     }
@@ -151,7 +148,7 @@ void WriteData(int32_t *q_, int16_t *current_, uint16_t *voltage_){
     
     for (int i = 0; i < NUMJOINTS; i++){
         if(i % 5 != 4){ //leg
-            myFile.print(q_[i]);
+            myFile.print(q_[i] - offset[i]);
             myFile.print(", ");
         }
         else{ //Wheel
